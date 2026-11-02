@@ -373,12 +373,19 @@ class HybridDeviceOptimizer(torch.optim.Optimizer):
             fp32_param = self.param_to_fp32_param[param]
             fp32_param.data.copy_(v["master_param"])
 
+    @torch.no_grad()
     def update_fp32_param_by_new_param(self):
         """
         Update the fp32 parameters by the new parameters.
         """
         for param, fp32_param in self.param_to_fp32_param.items():
             fp32_param.data.copy_(param)
+        # Native FP32 parameters have CPU optimizer copies but no separate
+        # mixed-precision master entry. Refresh them after checkpoint loading
+        # to prevent stale initialization from being copied back on first step.
+        for param, cpu_param in self.gpu_params_map_cpu_copy.items():
+            if param not in self.param_to_fp32_param:
+                cpu_param.data.copy_(param.data)
 
     def _register_load_state_dict_hooks(self):
         def pre_load_state_dict_hook(self, state_dict):
