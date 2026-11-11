@@ -4,6 +4,7 @@ import fnmatch
 import functools
 import logging
 import math
+import os
 import warnings
 from contextlib import nullcontext
 from enum import Enum
@@ -41,6 +42,7 @@ from ..fp8_utils import (
 from ..optimizer.param_layout import pad_bucket_end, pad_param_start
 from ..utils import is_torch_min_version, log_on_each_pipeline_stage
 from .distributed_data_parallel_config import DistributedDataParallelConfig
+from .grad_diagnostics import maybe_dump_grad_diagnostics
 from .reduce_scatter_with_fp32_accumulation import reduce_scatter_with_fp32_accumulation
 
 logger = logging.getLogger(__name__)
@@ -344,6 +346,7 @@ class _ParamAndGradBucketGroup:
         rerun_state_machine = get_rerun_state_machine()
         for i in range(len(self.buckets)):
             grad_norm = self.buckets[i].grad_data.norm(p=2)
+            maybe_dump_grad_diagnostics(self.buckets[i], i, grad_norm)
             # check for NaN, Inf and unexpectedly large grads
             if check_for_nan_or_inf:
                 rerun_state_machine.validate_result(
@@ -1227,6 +1230,8 @@ class _ParamAndGradBuffer:
         bucket_params_with_extra_main_grads = []
         cur_bucket_id = 0
         for param, param_name in params_with_names[::-1]:
+            if os.environ.get("GLM53_GRAD_DIAG") == "1":
+                param._diag_name = param_name
             # Get parameter indices computed in previous loop.
             param_start_index, param_end_index, bucket_id = self.param_index_map[param]
             nvfp4_packed_param_start_index = None

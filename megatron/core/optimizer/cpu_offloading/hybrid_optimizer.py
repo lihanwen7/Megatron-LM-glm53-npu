@@ -271,7 +271,9 @@ class HybridDeviceOptimizer(torch.optim.Optimizer):
                 orig_param = param
                 cpu_copy = False
                 if offload_params_numel < offload_threshold and param.is_cuda:
-                    param = param.detach().clone().cpu().pin_memory()
+                    param = param.detach().clone().cpu()
+                    if self.pin_cpu_params:
+                        param = param.pin_memory()
                     offload_params_numel += param.numel()
                     cpu_copy = True
                 if self.param_update_in_fp32 and param.dtype != torch.float32:
