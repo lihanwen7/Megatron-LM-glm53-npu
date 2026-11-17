@@ -562,6 +562,10 @@ class PersistentAsyncCaller(AsyncCaller):
         # in this new process are on the right device, and device 0 on the node does not
         # take on undue memory burden from other devices on node (default behavior without
         # this line).
+        # Spawned workers must initialize the same NPU shim as the trainer.
+        if os.environ.get("SLIME_ACCELERATOR") == "npu":
+            from torch_npu.contrib import transfer_to_npu  # noqa: F401
+
         torch.cuda.set_device(rank % torch.cuda.device_count())
 
         # Set QoS to deprioritize checkpoint writing vs training

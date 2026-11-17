@@ -372,7 +372,8 @@ class HybridDeviceOptimizer(torch.optim.Optimizer):
         if not self.param_update_in_fp32:
             return
         for param, v in self.state.items():
-            fp32_param = self.param_to_fp32_param[param]
+            # Native FP32 parameters use their inner parameter or CPU copy directly.
+            fp32_param = self.param_to_inner_param[param]
             fp32_param.data.copy_(v["master_param"])
 
     @torch.no_grad()

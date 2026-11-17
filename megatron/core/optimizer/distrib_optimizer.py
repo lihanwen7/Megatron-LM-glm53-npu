@@ -775,6 +775,17 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
             self.gbuf_ranges, self.model_param_gbuf_map, self.opt_group_ranges, config
         )
 
+        # Main-parameter construction orders each group as FP32 then FP16/BF16.
+        # Rebuild the index in that order so checkpoint save/load address the
+        # matching optimizer shard, including mixed-dtype parameter groups.
+        self.model_param_group_index_map = {
+            param: (group_index, param_index)
+            for group_index, (fp32_params, float16_params) in enumerate(
+                zip(self.model_fp32_groups, self.model_float16_groups)
+            )
+            for param_index, param in enumerate([*fp32_params, *float16_params])
+        }
+
         if isinstance(self.optimizer, HybridDeviceOptimizer):
             self.optimizer = HybridDeviceOptimizer(
                 params=[g["orig_group"] for g in self.opt_group_ranges], **self.optimizer.defaults
@@ -2089,6 +2100,10 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                     for src_tensors, (model_param, param_range_map) in zip(
                         bucket_state, gbuf_range_map["param_map"].items()
                     ):
+                        # Adam step is restored from common param_groups. The bucket's
+                        # LocalNonpersistentObject contains the load template's step,
+                        # which must not overwrite the checkpoint value.
+                        src_tensors = {k: v for k, v in src_tensors.items() if k != "step"}
                         # Main param & optimizer states.
                         self._set_main_param_and_optimizer_states(model_param, src_tensors)
 
